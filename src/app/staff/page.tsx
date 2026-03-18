@@ -136,6 +136,7 @@ export default function StaffPage() {
               {/* Personal Information */}
               <SectionCard icon={<User className="w-5 h-5" />} title="Personal Information">
                 <DataField label="First Name" value={patientData.firstName} />
+                <DataField label="Middle Name" value={patientData.middleName} />
                 <DataField label="Last Name" value={patientData.lastName} />
                 <DataField label="Date of Birth" value={patientData.dateOfBirth} />
                 <DataField label="Gender" value={patientData.gender} />

@@ -220,6 +220,18 @@ export default function PatientForm() {
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Middle Name
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.middleName || ""}
+                      onChange={(e) => handleInputChange("middleName", e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
                       Last Name <span className="text-red-500">*</span>
                     </label>
                     <input
@@ -596,7 +608,9 @@ export default function PatientForm() {
                     <div className="grid grid-cols-2 gap-3 text-sm">
                       <div>
                         <span className="text-gray-500">Name:</span>
-                        <p className="font-medium text-gray-900">{formData.firstName} {formData.lastName}</p>
+                        <p className="font-medium text-gray-900">
+                          {formData.firstName} {formData.middleName ? `${formData.middleName} ` : ""}{formData.lastName}
+                        </p>
                       </div>
                       <div>
                         <span className="text-gray-500">Date of Birth:</span>
