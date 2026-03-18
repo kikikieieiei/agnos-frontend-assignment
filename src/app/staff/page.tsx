@@ -1,25 +1,23 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
+import { User, Phone, Globe, AlertCircle, Eye, CheckCircle } from "lucide-react";
 import { PatientFormData } from "@/types/patient";
 import { getAblyClient } from "@/lib/ably";
+import { ConnectionStatus } from "@/components/ui/ConnectionStatus";
+import { StatusIndicator } from "@/components/ui/StatusIndicator";
+import { SectionCard } from "@/components/ui/SectionCard";
+import { DataField } from "@/components/ui/DataField";
 
-function sanitize(value: string | undefined): string {
-  if (!value) return "-";
-  return value.replace(/[<>&"']/g, (c) => ({
-    "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;", "'": "&#39;",
-  }[c] ?? c));
-}
-
-type Status = "not-started" | "actively-filling" | "inactive" | "submitted";
+type Status = "not_started" | "actively_filling" | "inactive" | "submitted";
 
 export default function StaffPage() {
   const [patientData, setPatientData] = useState<Partial<PatientFormData>>({});
-  const [status, setStatus] = useState<Status>("not-started");
+  const [status, setStatus] = useState<Status>("not_started");
   const [isConnected, setIsConnected] = useState(false);
   const lastUpdateTimeRef = useRef<number>(0);
   const statusIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const statusRef = useRef<Status>("not-started");
+  const statusRef = useRef<Status>("not_started");
 
   useEffect(() => {
     const ably = getAblyClient();
@@ -35,17 +33,17 @@ export default function StaffPage() {
 
     // Subscribe to form updates
     channel.subscribe("form-update", (message) => {
-      setPatientData(message.data);
+      setPatientData(message.data.formData);
       lastUpdateTimeRef.current = Date.now();
       if (statusRef.current !== "submitted") {
-        statusRef.current = "actively-filling";
-        setStatus("actively-filling");
+        statusRef.current = "actively_filling";
+        setStatus("actively_filling");
       }
     });
 
     // Subscribe to form submission
     channel.subscribe("form-submitted", (message) => {
-      setPatientData(message.data);
+      setPatientData(message.data.formData);
       statusRef.current = "submitted";
       setStatus("submitted");
     });
@@ -55,16 +53,16 @@ export default function StaffPage() {
       if (statusRef.current === "submitted") return;
 
       if (lastUpdateTimeRef.current === 0) {
-        statusRef.current = "not-started";
-        setStatus("not-started");
+        statusRef.current = "not_started";
+        setStatus("not_started");
         return;
       }
 
       const timeSinceLastUpdate = (Date.now() - lastUpdateTimeRef.current) / 1000;
 
       if (timeSinceLastUpdate < 5) {
-        statusRef.current = "actively-filling";
-        setStatus("actively-filling");
+        statusRef.current = "actively_filling";
+        setStatus("actively_filling");
       } else {
         statusRef.current = "inactive";
         setStatus("inactive");
@@ -79,133 +77,96 @@ export default function StaffPage() {
     };
   }, []);
 
-  const getStatusDisplay = () => {
-    switch (status) {
-      case "not-started":
-        return { icon: "⚪", text: "Not started", color: "text-gray-500" };
-      case "actively-filling":
-        return { icon: "🟢", text: "Actively filling", color: "text-green-600" };
-      case "inactive":
-        return { icon: "🟡", text: "Inactive", color: "text-yellow-600" };
-      case "submitted":
-        return { icon: "✅", text: "Submitted", color: "text-blue-600" };
-    }
-  };
-
-  const statusDisplay = getStatusDisplay();
-
-  const renderField = (label: string, value: string | undefined) => (
-    <div className="border-b border-gray-200 py-3">
-      <div className="text-sm font-medium text-gray-500 mb-1">{label}</div>
-      <div
-        className="text-base text-gray-800"
-        dangerouslySetInnerHTML={{ __html: sanitize(value) }}
-      />
-    </div>
-  );
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 py-8 px-4">
-      <div className="max-w-5xl mx-auto">
-        <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
-          {/* Header */}
-          <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h1 className="text-3xl font-bold text-white mb-2">Staff Dashboard</h1>
-                <p className="text-blue-100">Real-time Patient Registration Monitor</p>
-              </div>
-              <div className="bg-white/20 backdrop-blur-sm rounded-lg px-4 py-2">
-                <div className="flex items-center gap-2">
-                  <span className="text-2xl">{isConnected ? "🟢" : "🔴"}</span>
-                  <span className="text-sm font-medium text-white">
-                    {isConnected ? "Connected" : "Disconnected"}
-                  </span>
-                </div>
-              </div>
+    <div className="min-h-screen bg-gray-50 py-8 px-4">
+      <div className="max-w-6xl mx-auto">
+        {/* Header */}
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900 mb-1">Staff Dashboard</h1>
+              <p className="text-sm text-gray-600">Real-time Patient Registration Monitor</p>
+            </div>
+            <ConnectionStatus isConnected={isConnected} />
+          </div>
+        </div>
+
+        {/* Status Banner */}
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-6">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium text-gray-600">Form Status:</span>
+              <StatusIndicator status={status} />
             </div>
           </div>
+        </div>
 
-          {/* Status Banner */}
-          <div className="bg-gray-50 border-b border-gray-200 px-6 py-4">
-            <div className="flex items-center gap-3">
-              <span className="text-3xl">{statusDisplay.icon}</span>
-              <div>
-                <div className="text-sm font-medium text-gray-500">Form Status</div>
-                <div className={`text-lg font-bold ${statusDisplay.color}`}>
-                  {statusDisplay.text}
-                </div>
+        {/* Patient Data */}
+        {status === "not_started" ? (
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-12">
+            <div className="text-center">
+              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gray-100 flex items-center justify-center">
+                <Eye className="w-8 h-8 text-gray-400" />
               </div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">Waiting for Patient</h3>
+              <p className="text-sm text-gray-600">
+                Patient data will appear here in real-time once they start filling the form
+              </p>
             </div>
           </div>
-
-          {/* Patient Data */}
-          <div className="p-6">
-            {status === "not-started" ? (
-              <div className="text-center py-16">
-                <div className="text-6xl mb-4">👀</div>
-                <p className="text-xl text-gray-600">Waiting for patient to start filling the form...</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Personal Information */}
-                <div className="bg-gray-50 rounded-lg p-6">
-                  <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
-                    <span>👤</span> Personal Information
-                  </h2>
-                  {renderField("First Name", patientData.firstName)}
-                  {renderField("Middle Name", patientData.middleName)}
-                  {renderField("Last Name", patientData.lastName)}
-                  {renderField("Date of Birth", patientData.dateOfBirth)}
-                  {renderField("Gender", patientData.gender)}
-                </div>
-
-                {/* Contact Information */}
-                <div className="bg-gray-50 rounded-lg p-6">
-                  <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
-                    <span>📞</span> Contact Information
-                  </h2>
-                  {renderField("Phone Number", patientData.phoneNumber)}
-                  {renderField("Email", patientData.email)}
-                  {renderField("Address", patientData.address)}
-                </div>
-
-                {/* Additional Information */}
-                <div className="bg-gray-50 rounded-lg p-6">
-                  <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
-                    <span>🌍</span> Additional Information
-                  </h2>
-                  {renderField("Preferred Language", patientData.preferredLanguage)}
-                  {renderField("Nationality", patientData.nationality)}
-                  {renderField("Religion", patientData.religion)}
-                </div>
-
-                {/* Emergency Contact */}
-                <div className="bg-gray-50 rounded-lg p-6">
-                  <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
-                    <span>🚨</span> Emergency Contact
-                  </h2>
-                  {renderField("Contact Name", patientData.emergencyContactName)}
-                  {renderField("Relationship", patientData.emergencyContactRelationship)}
-                </div>
-              </div>
-            )}
-
+        ) : (
+          <div className="space-y-6">
+            {/* Submission Confirmation Banner */}
             {status === "submitted" && patientData.submittedAt && (
-              <div className="mt-6 bg-green-50 border border-green-200 rounded-lg p-4">
-                <div className="flex items-center gap-2">
-                  <span className="text-2xl">✅</span>
+              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                <div className="flex items-start gap-3">
+                  <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
                   <div>
-                    <div className="font-semibold text-green-800">Form Submitted</div>
-                    <div className="text-sm text-green-700">
+                    <h4 className="text-sm font-semibold text-green-900 mb-1">Form Submitted Successfully</h4>
+                    <p className="text-sm text-green-700">
                       Submitted at: {new Date(patientData.submittedAt).toLocaleString()}
-                    </div>
+                    </p>
                   </div>
                 </div>
               </div>
             )}
+
+            {/* Patient Data Grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Personal Information */}
+              <SectionCard icon={<User className="w-5 h-5" />} title="Personal Information">
+                <DataField label="First Name" value={patientData.firstName} />
+                <DataField label="Last Name" value={patientData.lastName} />
+                <DataField label="Date of Birth" value={patientData.dateOfBirth} />
+                <DataField label="Gender" value={patientData.gender} />
+              </SectionCard>
+
+              {/* Contact Information */}
+              <SectionCard icon={<Phone className="w-5 h-5" />} title="Contact Information">
+                <DataField label="Email" value={patientData.email} />
+                <DataField label="Phone Number" value={patientData.phone} />
+                <DataField label="Address" value={patientData.address} />
+                <DataField label="City" value={patientData.city} />
+                <DataField label="State" value={patientData.state} />
+                <DataField label="ZIP Code" value={patientData.zipCode} />
+              </SectionCard>
+
+              {/* Additional Information */}
+              <SectionCard icon={<Globe className="w-5 h-5" />} title="Additional Information">
+                <DataField label="Preferred Language" value={patientData.preferredLanguage} />
+                <DataField label="Nationality" value={patientData.nationality} />
+                <DataField label="Religion" value={patientData.religion} />
+              </SectionCard>
+
+              {/* Emergency Contact */}
+              <SectionCard icon={<AlertCircle className="w-5 h-5" />} title="Emergency Contact">
+                <DataField label="Contact Name" value={patientData.emergencyContactName} />
+                <DataField label="Contact Phone" value={patientData.emergencyContactPhone} />
+                <DataField label="Relationship" value={patientData.emergencyContactRelationship} />
+              </SectionCard>
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );

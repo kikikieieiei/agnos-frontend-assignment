@@ -451,6 +451,48 @@ export default function PatientForm() {
                   )}
                 </div>
 
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Nationality <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.nationality || ""}
+                    onChange={(e) => handleInputChange("nationality", e.target.value)}
+                    placeholder="e.g., Thai, American, British"
+                    className={`w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white ${
+                      errors.nationality ? "border-red-500" : "border-gray-300"
+                    }`}
+                  />
+                  {errors.nationality && (
+                    <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
+                      <AlertCircle className="w-3.5 h-3.5" />
+                      {errors.nationality}
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Religion
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.religion || ""}
+                    onChange={(e) => handleInputChange("religion", e.target.value)}
+                    placeholder="e.g., Buddhism, Christianity, Islam"
+                    className={`w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white ${
+                      errors.religion ? "border-red-500" : "border-gray-300"
+                    }`}
+                  />
+                  {errors.religion && (
+                    <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
+                      <AlertCircle className="w-3.5 h-3.5" />
+                      {errors.religion}
+                    </p>
+                  )}
+                </div>
+
               </div>
             )}
 
@@ -589,6 +631,14 @@ export default function PatientForm() {
                       <div>
                         <span className="text-gray-500">Language:</span>
                         <p className="font-medium text-gray-900">{formData.preferredLanguage}</p>
+                      </div>
+                      <div>
+                        <span className="text-gray-500">Nationality:</span>
+                        <p className="font-medium text-gray-900">{formData.nationality}</p>
+                      </div>
+                      <div>
+                        <span className="text-gray-500">Religion:</span>
+                        <p className="font-medium text-gray-900">{formData.religion}</p>
                       </div>
                     </div>
                   </div>
