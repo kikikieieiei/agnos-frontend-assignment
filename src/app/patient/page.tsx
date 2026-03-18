@@ -25,7 +25,7 @@ export default function PatientForm() {
     gender: undefined,
   });
 
-  const sessionId = useRef<string>(`session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`);
+  const sessionId = useRef<string>(`session-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`);
   const debounceTimer = useRef<NodeJS.Timeout | null>(null);
 
   // Ably connection
@@ -105,13 +105,6 @@ export default function PatientForm() {
     setErrors({});
   };
 
-  const goToStep = (step: number) => {
-    // Can only go back or to review
-    if (step < currentStep || step === 5) {
-      setCurrentStep(step);
-      setErrors({});
-    }
-  };
 
   const handleSubmit = async () => {
     // Validate all steps
