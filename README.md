@@ -6,15 +6,15 @@ Real-time patient intake system built with Next.js 15, Ably Pub/Sub, and Tailwin
 
 ```mermaid
 graph TD
-    A[Patient Browser] -->|fills form| B[Patient Form /patient]
-    B -->|publish form-update| C[Ably Channel: patient-form]
-    C -->|subscribe form-update| D[Staff Dashboard /staff]
+    A[Patient Browser] -->|fills form| B["Patient Form (/patient)"]
+    B -->|publish form-update| C["Ably Channel: patient-form"]
+    C -->|subscribe form-update| D["Staff Dashboard (/staff)"]
     D -->|displays live data| E[Staff Browser]
 
-    B -->|GET authUrl| F[/api/ably-token]
+    B -->|GET authUrl| F["/api/ably-token"]
     F -->|createTokenRequest| G[Ably REST API]
-    G -->>F
-    F -->>B
+    G --> F
+    F --> B
 
     D -->|GET authUrl| F
 ```
