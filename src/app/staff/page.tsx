@@ -75,7 +75,7 @@ export default function StaffPage() {
       if (statusIntervalRef.current) {
         clearInterval(statusIntervalRef.current);
       }
-      destroyAblyClient();
+      channel.unsubscribe();
     };
   }, []);
 
