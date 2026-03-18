@@ -12,18 +12,9 @@ interface ProgressBarProps {
 }
 
 export function ProgressBar({ currentStep, steps }: ProgressBarProps) {
-  const progress = ((currentStep - 1) / (steps.length - 1)) * 100;
-
   return (
     <div className="w-full mb-8">
       <div className="relative flex justify-between items-start">
-        {/* Background line */}
-        <div className="absolute top-4 left-4 right-4 h-0.5 bg-gray-200" />
-        {/* Progress line */}
-        <div
-          className="absolute top-4 left-4 h-0.5 bg-blue-600 transition-all duration-300"
-          style={{ width: `calc(${progress}% - 2rem)` }}
-        />
 
         {steps.map((step) => {
           const isCompleted = step.number < currentStep;
