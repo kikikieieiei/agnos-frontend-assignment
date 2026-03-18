@@ -68,8 +68,13 @@ export default function PatientPage() {
       setIsConnected(false);
     });
 
+    // Check if already connected
+    if (ably.connection.state === "connected") {
+      setIsConnected(true);
+    }
+
     return () => {
-      destroyAblyClient();
+      channel.unsubscribe();
     };
   }, []);
 
