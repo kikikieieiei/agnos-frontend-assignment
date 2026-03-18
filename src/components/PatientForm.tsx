@@ -197,6 +197,7 @@ export default function PatientForm() {
                 </label>
                 <input
                   type="text"
+                  maxLength={100}
                   {...register("firstName")}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
@@ -211,6 +212,7 @@ export default function PatientForm() {
                 </label>
                 <input
                   type="text"
+                  maxLength={100}
                   {...register("middleName")}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
@@ -225,6 +227,7 @@ export default function PatientForm() {
                 </label>
                 <input
                   type="text"
+                  maxLength={100}
                   {...register("lastName")}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
@@ -316,6 +319,7 @@ export default function PatientForm() {
               <textarea
                 {...register("address")}
                 rows={3}
+                maxLength={500}
                 placeholder="Street, City, State, ZIP"
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
@@ -338,6 +342,7 @@ export default function PatientForm() {
                 </label>
                 <input
                   type="text"
+                  maxLength={100}
                   {...register("preferredLanguage")}
                   placeholder="e.g., English, Spanish"
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -355,6 +360,7 @@ export default function PatientForm() {
                 </label>
                 <input
                   type="text"
+                  maxLength={100}
                   {...register("nationality")}
                   placeholder="e.g., American, Canadian"
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -370,6 +376,7 @@ export default function PatientForm() {
                 </label>
                 <input
                   type="text"
+                  maxLength={100}
                   {...register("religion")}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
@@ -393,6 +400,7 @@ export default function PatientForm() {
                 </label>
                 <input
                   type="text"
+                  maxLength={100}
                   {...register("emergencyContactName")}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
@@ -409,6 +417,7 @@ export default function PatientForm() {
                 </label>
                 <input
                   type="text"
+                  maxLength={100}
                   {...register("emergencyContactRelationship")}
                   placeholder="e.g., Spouse, Parent"
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
