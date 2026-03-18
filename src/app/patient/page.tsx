@@ -2,32 +2,45 @@
 
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { z } from "zod";
 import { PatientFormData } from "@/types/patient";
 import { getAblyClient, destroyAblyClient } from "@/lib/ably";
 
 // Zod validation schema
 const patientFormSchema = z.object({
-  firstName: z.string().min(1, "First name is required"),
-  middleName: z.string().optional(),
-  lastName: z.string().min(1, "Last name is required"),
-  dateOfBirth: z.string().min(1, "Date of birth is required"),
+  firstName: z.string().min(1, "First name is required").max(100, "First name is too long"),
+  middleName: z.string().max(100, "Middle name is too long").optional(),
+  lastName: z.string().min(1, "Last name is required").max(100, "Last name is too long"),
+  dateOfBirth: z.string()
+    .min(1, "Date of birth is required")
+    .refine((date) => {
+      const dob = new Date(date);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      return dob <= today;
+    }, { message: "Date of birth cannot be in the future" }),
   gender: z.string().min(1, "Gender is required"),
-  phoneNumber: z.string().regex(/^[+]?[\d\s\-\(\)]{7,15}$/, "Invalid phone number format"),
-  email: z.string().email("Invalid email address"),
-  address: z.string().min(1, "Address is required"),
-  preferredLanguage: z.string().min(1, "Preferred language is required"),
-  nationality: z.string().min(1, "Nationality is required"),
-  emergencyContactName: z.string().optional(),
-  emergencyContactRelationship: z.string().optional(),
-  religion: z.string().optional(),
+  phoneNumber: z.string()
+    .min(1, "Phone number is required")
+    .refine((phone) => {
+      const cleaned = phone.replace(/[\s\-\(\)]/g, "");
+      return /^[+]?[0-9]{7,15}$/.test(cleaned);
+    }, { message: "Please enter a valid phone number (7-15 digits)" }),
+  email: z.string().min(1, "Email is required").email("Invalid email address"),
+  address: z.string().min(1, "Address is required").max(500, "Address is too long"),
+  preferredLanguage: z.string().min(1, "Preferred language is required").max(100, "Too long"),
+  nationality: z.string().min(1, "Nationality is required").max(100, "Too long"),
+  emergencyContactName: z.string().max(100, "Contact name is too long").optional(),
+  emergencyContactRelationship: z.string().max(100, "Relationship is too long").optional(),
+  religion: z.string().max(100, "Religion is too long").optional(),
 });
 
 export default function PatientPage() {
   const [isConnected, setIsConnected] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
-  const channelRef = useRef<any>(null);
+  const channelRef = useRef<ReturnType<ReturnType<typeof getAblyClient>["channels"]["get"]> | null>(null);
+  const debounceRef = useRef<NodeJS.Timeout | null>(null);
 
   const {
     register,
@@ -60,12 +73,22 @@ export default function PatientPage() {
     };
   }, []);
 
-  // Publish form updates in real-time
-  useEffect(() => {
+  // Publish form updates in real-time (debounced 500ms)
+  const broadcastFormData = useCallback((data: typeof formValues) => {
     if (channelRef.current && isConnected && !isSubmitted) {
-      channelRef.current.publish("form-update", formValues);
+      channelRef.current.publish("form-update", data);
     }
-  }, [formValues, isConnected, isSubmitted]);
+  }, [isConnected, isSubmitted]);
+
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      broadcastFormData(formValues);
+    }, 500);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [formValues, broadcastFormData]);
 
   const onSubmit = (data: PatientFormData) => {
     if (channelRef.current) {
@@ -110,6 +133,7 @@ export default function PatientPage() {
                     </label>
                     <input
                       {...register("firstName")}
+                      maxLength={100}
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
                     />
                     {errors.firstName && (
@@ -121,6 +145,7 @@ export default function PatientPage() {
                     <label className="block text-sm font-medium text-gray-700 mb-1">Middle Name</label>
                     <input
                       {...register("middleName")}
+                      maxLength={100}
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
                     />
                   </div>
@@ -131,6 +156,7 @@ export default function PatientPage() {
                     </label>
                     <input
                       {...register("lastName")}
+                      maxLength={100}
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
                     />
                     {errors.lastName && (
@@ -147,6 +173,7 @@ export default function PatientPage() {
                     <input
                       type="date"
                       {...register("dateOfBirth")}
+                      max={new Date().toISOString().split("T")[0]}
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
                     />
                     {errors.dateOfBirth && (
@@ -215,6 +242,7 @@ export default function PatientPage() {
                   <textarea
                     {...register("address")}
                     rows={3}
+                    maxLength={500}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
                   />
                   {errors.address && (
