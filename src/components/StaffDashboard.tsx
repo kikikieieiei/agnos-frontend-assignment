@@ -305,7 +305,7 @@ export default function StaffDashboard() {
 
                     <DetailField
                       label="Phone Number"
-                      value={selectedSessionData.formData.phoneNumber}
+                      value={selectedSessionData.formData.phone}
                     />
                     <DetailField
                       label="Email"
