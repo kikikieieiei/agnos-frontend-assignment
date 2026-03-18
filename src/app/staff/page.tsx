@@ -162,7 +162,6 @@ export default function StaffPage() {
               {/* Emergency Contact */}
               <SectionCard icon={<AlertCircle className="w-5 h-5" />} title="Emergency Contact">
                 <DataField label="Contact Name" value={patientData.emergencyContactName} />
-                <DataField label="Contact Phone" value={patientData.emergencyContactPhone} />
                 <DataField label="Relationship" value={patientData.emergencyContactRelationship} />
               </SectionCard>
             </div>

@@ -16,7 +16,6 @@ export const patientFormSchema = z.object({
   preferredLanguage: z.string().min(1, "Preferred language is required"),
   nationality: z.string().min(1, "Nationality is required"),
   emergencyContactName: z.string().optional(),
-  emergencyContactPhone: z.string().optional(),
   emergencyContactRelationship: z.string().optional(),
   religion: z.string().optional(),
 });
@@ -45,7 +44,6 @@ export const StepSchemas = {
   }),
   4: z.object({
     emergencyContactName: z.string().optional(),
-    emergencyContactPhone: z.string().optional(),
     emergencyContactRelationship: z.string().optional(),
   }),
 };
@@ -66,7 +64,6 @@ export interface PatientFormData {
   preferredLanguage: string;
   nationality: string;
   emergencyContactName?: string;
-  emergencyContactPhone?: string;
   emergencyContactRelationship?: string;
   religion?: string;
   submittedAt?: string;

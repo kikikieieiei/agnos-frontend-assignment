@@ -517,7 +517,7 @@ export default function PatientForm() {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Contact Name <span className="text-red-500">*</span>
+                    Contact Name
                   </label>
                   <input
                     type="text"
@@ -537,32 +537,7 @@ export default function PatientForm() {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Contact Phone <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="tel"
-                    value={formData.emergencyContactPhone || ""}
-                    onChange={(e) => handleInputChange("emergencyContactPhone", e.target.value)}
-                    onKeyDown={(e) => {
-                      if (!/[\d\+\-\(\)\s]/.test(e.key) && !["Backspace","Delete","ArrowLeft","ArrowRight","Tab"].includes(e.key)) {
-                        e.preventDefault();
-                      }
-                    }}
-                    className={`w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white ${
-                      errors.emergencyContactPhone ? "border-red-500" : "border-gray-300"
-                    }`}
-                  />
-                  {errors.emergencyContactPhone && (
-                    <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
-                      <AlertCircle className="w-3.5 h-3.5" />
-                      {errors.emergencyContactPhone}
-                    </p>
-                  )}
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Relationship <span className="text-red-500">*</span>
+                    Relationship
                   </label>
                   <input
                     type="text"
@@ -668,15 +643,11 @@ export default function PatientForm() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
                       <div>
                         <span className="text-gray-500">Name:</span>
-                        <p className="font-medium text-gray-900">{formData.emergencyContactName}</p>
-                      </div>
-                      <div>
-                        <span className="text-gray-500">Phone:</span>
-                        <p className="font-medium text-gray-900">{formData.emergencyContactPhone}</p>
+                        <p className="font-medium text-gray-900">{formData.emergencyContactName || "—"}</p>
                       </div>
                       <div>
                         <span className="text-gray-500">Relationship:</span>
-                        <p className="font-medium text-gray-900">{formData.emergencyContactRelationship}</p>
+                        <p className="font-medium text-gray-900">{formData.emergencyContactRelationship || "—"}</p>
                       </div>
                     </div>
                   </div>
