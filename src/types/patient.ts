@@ -14,3 +14,10 @@ export interface PatientFormData {
   religion?: string;
   submittedAt?: string;
 }
+
+export interface PatientSession {
+  sessionId: string;
+  formData: Partial<PatientFormData>;
+  status: "filling" | "submitted" | "inactive";
+  lastActivity: number;
+}

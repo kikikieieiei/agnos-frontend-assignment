@@ -4,6 +4,13 @@ import { useEffect, useState, useRef } from "react";
 import { PatientFormData } from "@/types/patient";
 import { getAblyClient, destroyAblyClient } from "@/lib/ably";
 
+function sanitize(value: string | undefined): string {
+  if (!value) return "-";
+  return value.replace(/[<>&"']/g, (c) => ({
+    "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;", "'": "&#39;",
+  }[c] ?? c));
+}
+
 type Status = "not-started" | "actively-filling" | "inactive" | "submitted";
 
 export default function StaffPage() {
@@ -12,6 +19,7 @@ export default function StaffPage() {
   const [isConnected, setIsConnected] = useState(false);
   const lastUpdateTimeRef = useRef<number>(0);
   const statusIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const statusRef = useRef<Status>("not-started");
 
   useEffect(() => {
     const ably = getAblyClient();
@@ -29,9 +37,8 @@ export default function StaffPage() {
     channel.subscribe("form-update", (message) => {
       setPatientData(message.data);
       lastUpdateTimeRef.current = Date.now();
-
-      // Don't change status if already submitted
-      if (status !== "submitted") {
+      if (statusRef.current !== "submitted") {
+        statusRef.current = "actively-filling";
         setStatus("actively-filling");
       }
     });
@@ -39,14 +46,16 @@ export default function StaffPage() {
     // Subscribe to form submission
     channel.subscribe("form-submitted", (message) => {
       setPatientData(message.data);
+      statusRef.current = "submitted";
       setStatus("submitted");
     });
 
     // Status update interval
     statusIntervalRef.current = setInterval(() => {
-      if (status === "submitted") return;
+      if (statusRef.current === "submitted") return;
 
       if (lastUpdateTimeRef.current === 0) {
+        statusRef.current = "not-started";
         setStatus("not-started");
         return;
       }
@@ -54,10 +63,10 @@ export default function StaffPage() {
       const timeSinceLastUpdate = (Date.now() - lastUpdateTimeRef.current) / 1000;
 
       if (timeSinceLastUpdate < 5) {
+        statusRef.current = "actively-filling";
         setStatus("actively-filling");
-      } else if (timeSinceLastUpdate < 30) {
-        setStatus("inactive");
       } else {
+        statusRef.current = "inactive";
         setStatus("inactive");
       }
     }, 1000);
@@ -68,7 +77,7 @@ export default function StaffPage() {
       }
       destroyAblyClient();
     };
-  }, [status]);
+  }, []);
 
   const getStatusDisplay = () => {
     switch (status) {
@@ -85,10 +94,13 @@ export default function StaffPage() {
 
   const statusDisplay = getStatusDisplay();
 
-  const renderField = (label: string, value: any) => (
+  const renderField = (label: string, value: string | undefined) => (
     <div className="border-b border-gray-200 py-3">
       <div className="text-sm font-medium text-gray-500 mb-1">{label}</div>
-      <div className="text-base text-gray-800">{value || "-"}</div>
+      <div
+        className="text-base text-gray-800"
+        dangerouslySetInnerHTML={{ __html: sanitize(value) }}
+      />
     </div>
   );
 
