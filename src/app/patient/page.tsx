@@ -1,158 +1,221 @@
 "use client";
-
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { useEffect, useState, useRef, useCallback } from "react";
-import { z } from "zod";
-import { PatientFormData } from "@/types/patient";
+import { useState, useEffect, useCallback, useRef } from "react";
+import Link from "next/link";
+import { User, Phone, Globe, Heart, CheckCircle, ArrowLeft, ArrowRight, Send, AlertCircle, ShieldCheck, Info } from "lucide-react";
+import { ConnectionStatus } from "@/components/ui/ConnectionStatus";
+import { ProgressBar } from "@/components/ui/ProgressBar";
+import { PatientFormData, StepSchemas } from "@/types/patient";
 import { getAblyClient } from "@/lib/ably";
+import { ZodError } from "zod";
 
-// Zod validation schema
-const patientFormSchema = z.object({
-  firstName: z.string().min(1, "First name is required").max(100, "First name is too long"),
-  middleName: z.string().max(100, "Middle name is too long").optional(),
-  lastName: z.string().min(1, "Last name is required").max(100, "Last name is too long"),
-  dateOfBirth: z.string()
-    .min(1, "Date of birth is required")
-    .refine((date) => {
-      const dob = new Date(date);
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      return dob <= today;
-    }, { message: "Date of birth cannot be in the future" }),
-  gender: z.string().min(1, "Gender is required"),
-  phoneNumber: z.string()
-    .min(1, "Phone number is required")
-    .refine((phone) => {
-      const cleaned = phone.replace(/[\s\-\(\)]/g, "");
-      return /^[+]?[0-9]{7,15}$/.test(cleaned);
-    }, { message: "Please enter a valid phone number (7-15 digits)" }),
-  email: z.string().min(1, "Email is required").email("Invalid email address"),
-  address: z.string().min(1, "Address is required").max(500, "Address is too long"),
-  preferredLanguage: z.string().min(1, "Preferred language is required").max(100, "Too long"),
-  nationality: z.string().min(1, "Nationality is required").max(100, "Too long"),
-  emergencyContactName: z.string().max(100, "Contact name is too long").optional(),
-  emergencyContactRelationship: z.string().max(100, "Relationship is too long").optional(),
-  religion: z.string().max(100, "Religion is too long").optional(),
-});
+const STEPS = [
+  { number: 1, label: "Personal Info" },
+  { number: 2, label: "Contact" },
+  { number: 3, label: "Preferences" },
+  { number: 4, label: "Emergency" },
+  { number: 5, label: "Review" },
+];
 
-export default function PatientPage() {
-  const [isConnected, setIsConnected] = useState(false);
+export default function PatientForm() {
+  const [currentStep, setCurrentStep] = useState(1);
   const [isSubmitted, setIsSubmitted] = useState(false);
-  const channelRef = useRef<ReturnType<ReturnType<typeof getAblyClient>["channels"]["get"]> | null>(null);
-  const debounceRef = useRef<NodeJS.Timeout | null>(null);
-
-  const {
-    register,
-    handleSubmit,
-    watch,
-    formState: { errors },
-  } = useForm<PatientFormData>({
-    resolver: zodResolver(patientFormSchema),
-    mode: "onChange",
+  const [isConnected, setIsConnected] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [formData, setFormData] = useState<Partial<PatientFormData>>({
+    gender: undefined,
   });
 
-  // Watch form values for real-time sync
-  const formValues = watch();
+  const sessionId = useRef<string>(`session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`);
+  const debounceTimer = useRef<NodeJS.Timeout | null>(null);
 
+  // Ably connection
   useEffect(() => {
-    const ably = getAblyClient();
-    const channel = ably.channels.get("patient-form");
-    channelRef.current = channel;
+    const client = getAblyClient();
+    const channel = client.channels.get("patient-form");
 
-    ably.connection.on("connected", () => {
-      setIsConnected(true);
-    });
-
-    ably.connection.on("disconnected", () => {
-      setIsConnected(false);
-    });
-
-    // Check if already connected
-    if (ably.connection.state === "connected") {
-      setIsConnected(true);
-    }
+    client.connection.on("connected", () => setIsConnected(true));
+    client.connection.on("disconnected", () => setIsConnected(false));
+    client.connection.on("closed", () => setIsConnected(false));
 
     return () => {
       channel.unsubscribe();
     };
   }, []);
 
-  // Publish form updates in real-time (debounced 500ms)
-  const broadcastFormData = useCallback((data: typeof formValues) => {
-    if (channelRef.current && isConnected && !isSubmitted) {
-      channelRef.current.publish("form-update", data);
+  // Debounced publish to Ably
+  const publishUpdate = useCallback((data: Partial<PatientFormData>) => {
+    if (debounceTimer.current) {
+      clearTimeout(debounceTimer.current);
     }
-  }, [isConnected, isSubmitted]);
 
-  useEffect(() => {
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => {
-      broadcastFormData(formValues);
+    debounceTimer.current = setTimeout(() => {
+      try {
+        const client = getAblyClient();
+        const channel = client.channels.get("patient-form");
+        channel.publish("form-update", {
+          sessionId: sessionId.current,
+          formData: data,
+          timestamp: Date.now(),
+        });
+      } catch (error) {
+        console.error("Error publishing update:", error);
+      }
     }, 500);
-    return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-    };
-  }, [formValues, broadcastFormData]);
+  }, []);
 
-  const onSubmit = (data: PatientFormData) => {
-    if (channelRef.current) {
-      const submittedData = {
-        ...data,
-        submittedAt: new Date().toISOString(),
-      };
-      channelRef.current.publish("form-submitted", submittedData);
-      setIsSubmitted(true);
+  const handleInputChange = (field: keyof PatientFormData, value: string) => {
+    const updatedData = { ...formData, [field]: value };
+    setFormData(updatedData);
+    setErrors((prev) => ({ ...prev, [field]: "" }));
+    publishUpdate(updatedData);
+  };
+
+  const validateStep = (step: number): boolean => {
+    if (step === 5) return true; // Review step has no validation
+
+    const schema = StepSchemas[step as keyof typeof StepSchemas];
+    if (!schema) return true;
+
+    try {
+      schema.parse(formData);
+      setErrors({});
+      return true;
+    } catch (error) {
+      if (error instanceof ZodError) {
+        const fieldErrors: Record<string, string> = {};
+        error.errors.forEach((err) => {
+          if (err.path[0]) {
+            fieldErrors[err.path[0] as string] = err.message;
+          }
+        });
+        setErrors(fieldErrors);
+      }
+      return false;
     }
   };
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 py-8 px-4">
-      <div className="max-w-3xl mx-auto">
-        <div className="bg-white rounded-2xl shadow-xl p-8">
-          <div className="flex items-center justify-between mb-6">
-            <h1 className="text-3xl font-bold text-gray-800">Patient Registration Form</h1>
-            <div className="flex items-center gap-2">
-              <span className="text-2xl">{isConnected ? "🟢" : "🔴"}</span>
-              <span className="text-sm font-medium text-gray-600">
-                {isConnected ? "Connected" : "Disconnected"}
-              </span>
-            </div>
-          </div>
+  const nextStep = () => {
+    if (validateStep(currentStep)) {
+      setCurrentStep((prev) => Math.min(prev + 1, STEPS.length));
+    }
+  };
 
-          {isSubmitted ? (
-            <div className="bg-green-50 border border-green-200 rounded-lg p-6 text-center">
-              <div className="text-6xl mb-4">✅</div>
-              <h2 className="text-2xl font-bold text-green-800 mb-2">Form Submitted Successfully!</h2>
-              <p className="text-green-700">Thank you for completing the registration.</p>
+  const prevStep = () => {
+    setCurrentStep((prev) => Math.max(prev - 1, 1));
+    setErrors({});
+  };
+
+  const goToStep = (step: number) => {
+    // Can only go back or to review
+    if (step < currentStep || step === 5) {
+      setCurrentStep(step);
+      setErrors({});
+    }
+  };
+
+  const handleSubmit = async () => {
+    // Validate all steps
+    for (let step = 1; step <= 4; step++) {
+      if (!validateStep(step)) {
+        setCurrentStep(step);
+        return;
+      }
+    }
+
+    try {
+      const client = getAblyClient();
+      const channel = client.channels.get("patient-form");
+      await channel.publish("form-submitted", {
+        sessionId: sessionId.current,
+        formData,
+        timestamp: Date.now(),
+      });
+      setIsSubmitted(true);
+    } catch (error) {
+      console.error("Error submitting form:", error);
+      alert("Failed to submit form. Please try again.");
+    }
+  };
+
+  if (isSubmitted) {
+    return (
+      <main className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="w-full max-w-md">
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center">
+            <div className="flex justify-center mb-6">
+              <div className="w-16 h-16 rounded-full bg-green-50 flex items-center justify-center">
+                <CheckCircle className="w-8 h-8 text-green-600" />
+              </div>
             </div>
-          ) : (
-            <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-              {/* Personal Information */}
-              <div className="border-b pb-6">
-                <h2 className="text-xl font-semibold text-gray-700 mb-4">Personal Information</h2>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">
+              Registration Complete
+            </h1>
+            <p className="text-base text-gray-600 mb-6">
+              Your information has been submitted successfully. Our staff will review your registration shortly.
+            </p>
+            <Link
+              href="/"
+              className="inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-md font-medium text-base bg-blue-600 hover:bg-blue-700 text-white transition-colors"
+            >
+              Return to Home
+            </Link>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  return (
+    <main className="min-h-screen bg-gray-50 p-4">
+      <div className="max-w-4xl mx-auto">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-6">
+          <Link
+            href="/"
+            className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 transition-colors"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Back to Home
+          </Link>
+          <ConnectionStatus isConnected={isConnected} />
+        </div>
+
+        {/* Main Form Card */}
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 sm:p-8">
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">Patient Registration</h1>
+          <p className="text-sm text-gray-500 mb-6">Please fill out all required information</p>
+
+          <ProgressBar currentStep={currentStep} steps={STEPS} />
+
+          <div className="mt-2">
+            {currentStep === 1 && (
+              <div className="space-y-6">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-10 h-10 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
+                    <User className="w-5 h-5" />
+                  </div>
+                  <h2 className="text-xl font-semibold text-gray-900">Personal Information</h2>
+                </div>
+
+                <div className="grid sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       First Name <span className="text-red-500">*</span>
                     </label>
                     <input
-                      {...register("firstName")}
-                      maxLength={100}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+                      type="text"
+                      value={formData.firstName || ""}
+                      onChange={(e) => handleInputChange("firstName", e.target.value)}
+                      className={`w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white ${
+                        errors.firstName ? "border-red-500" : "border-gray-300"
+                      }`}
                     />
                     {errors.firstName && (
-                      <p className="text-red-500 text-xs mt-1">{errors.firstName.message}</p>
+                      <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
+                        <AlertCircle className="w-3.5 h-3.5" />
+                        {errors.firstName}
+                      </p>
                     )}
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Middle Name</label>
-                    <input
-                      {...register("middleName")}
-                      maxLength={100}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
-                    />
                   </div>
 
                   <div>
@@ -160,199 +223,451 @@ export default function PatientPage() {
                       Last Name <span className="text-red-500">*</span>
                     </label>
                     <input
-                      {...register("lastName")}
-                      maxLength={100}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+                      type="text"
+                      value={formData.lastName || ""}
+                      onChange={(e) => handleInputChange("lastName", e.target.value)}
+                      className={`w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white ${
+                        errors.lastName ? "border-red-500" : "border-gray-300"
+                      }`}
                     />
                     {errors.lastName && (
-                      <p className="text-red-500 text-xs mt-1">{errors.lastName.message}</p>
+                      <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
+                        <AlertCircle className="w-3.5 h-3.5" />
+                        {errors.lastName}
+                      </p>
                     )}
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Date of Birth <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="date"
-                      {...register("dateOfBirth")}
-                      max={new Date().toISOString().split("T")[0]}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
-                    />
-                    {errors.dateOfBirth && (
-                      <p className="text-red-500 text-xs mt-1">{errors.dateOfBirth.message}</p>
-                    )}
-                  </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Date of Birth <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="date"
+                    value={formData.dateOfBirth || ""}
+                    onChange={(e) => handleInputChange("dateOfBirth", e.target.value)}
+                    className={`w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white ${
+                      errors.dateOfBirth ? "border-red-500" : "border-gray-300"
+                    }`}
+                  />
+                  {errors.dateOfBirth && (
+                    <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
+                      <AlertCircle className="w-3.5 h-3.5" />
+                      {errors.dateOfBirth}
+                    </p>
+                  )}
+                </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Gender <span className="text-red-500">*</span>
-                    </label>
-                    <select
-                      {...register("gender")}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
-                    >
-                      <option value="">Select gender</option>
-                      <option value="Male">Male</option>
-                      <option value="Female">Female</option>
-                      <option value="Other">Other</option>
-                      <option value="Prefer not to say">Prefer not to say</option>
-                    </select>
-                    {errors.gender && (
-                      <p className="text-red-500 text-xs mt-1">{errors.gender.message}</p>
-                    )}
-                  </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Gender <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={formData.gender || ""}
+                    onChange={(e) => handleInputChange("gender", e.target.value)}
+                    className={`w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white ${
+                      errors.gender ? "border-red-500" : "border-gray-300"
+                    }`}
+                  >
+                    <option value="">Select gender</option>
+                    <option value="male">Male</option>
+                    <option value="female">Female</option>
+                    <option value="other">Other</option>
+                    <option value="prefer_not_to_say">Prefer not to say</option>
+                  </select>
+                  {errors.gender && (
+                    <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
+                      <AlertCircle className="w-3.5 h-3.5" />
+                      {errors.gender}
+                    </p>
+                  )}
                 </div>
               </div>
+            )}
 
-              {/* Contact Information */}
-              <div className="border-b pb-6">
-                <h2 className="text-xl font-semibold text-gray-700 mb-4">Contact Information</h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Phone Number <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      {...register("phoneNumber")}
-                      placeholder="+1 234 567 8900"
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
-                    />
-                    {errors.phoneNumber && (
-                      <p className="text-red-500 text-xs mt-1">{errors.phoneNumber.message}</p>
-                    )}
+            {currentStep === 2 && (
+              <div className="space-y-6">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-10 h-10 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
+                    <Phone className="w-5 h-5" />
                   </div>
+                  <h2 className="text-xl font-semibold text-gray-900">Contact Information</h2>
+                </div>
 
+                <div className="grid sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       Email <span className="text-red-500">*</span>
                     </label>
                     <input
                       type="email"
-                      {...register("email")}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+                      value={formData.email || ""}
+                      onChange={(e) => handleInputChange("email", e.target.value)}
+                      className={`w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white ${
+                        errors.email ? "border-red-500" : "border-gray-300"
+                      }`}
                     />
                     {errors.email && (
-                      <p className="text-red-500 text-xs mt-1">{errors.email.message}</p>
+                      <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
+                        <AlertCircle className="w-3.5 h-3.5" />
+                        {errors.email}
+                      </p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Phone Number <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="tel"
+                      value={formData.phone || ""}
+                      onChange={(e) => handleInputChange("phone", e.target.value)}
+                      className={`w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white ${
+                        errors.phone ? "border-red-500" : "border-gray-300"
+                      }`}
+                    />
+                    {errors.phone && (
+                      <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
+                        <AlertCircle className="w-3.5 h-3.5" />
+                        {errors.phone}
+                      </p>
                     )}
                   </div>
                 </div>
 
-                <div className="mt-4">
+                <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Address <span className="text-red-500">*</span>
                   </label>
-                  <textarea
-                    {...register("address")}
-                    rows={3}
-                    maxLength={500}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+                  <input
+                    type="text"
+                    value={formData.address || ""}
+                    onChange={(e) => handleInputChange("address", e.target.value)}
+                    className={`w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white ${
+                      errors.address ? "border-red-500" : "border-gray-300"
+                    }`}
                   />
                   {errors.address && (
-                    <p className="text-red-500 text-xs mt-1">{errors.address.message}</p>
+                    <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
+                      <AlertCircle className="w-3.5 h-3.5" />
+                      {errors.address}
+                    </p>
+                  )}
+                </div>
+
+                <div className="grid sm:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      City <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.city || ""}
+                      onChange={(e) => handleInputChange("city", e.target.value)}
+                      className={`w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white ${
+                        errors.city ? "border-red-500" : "border-gray-300"
+                      }`}
+                    />
+                    {errors.city && (
+                      <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
+                        <AlertCircle className="w-3.5 h-3.5" />
+                        {errors.city}
+                      </p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      State <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.state || ""}
+                      onChange={(e) => handleInputChange("state", e.target.value)}
+                      className={`w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white ${
+                        errors.state ? "border-red-500" : "border-gray-300"
+                      }`}
+                    />
+                    {errors.state && (
+                      <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
+                        <AlertCircle className="w-3.5 h-3.5" />
+                        {errors.state}
+                      </p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      ZIP Code <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.zipCode || ""}
+                      onChange={(e) => handleInputChange("zipCode", e.target.value)}
+                      className={`w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white ${
+                        errors.zipCode ? "border-red-500" : "border-gray-300"
+                      }`}
+                    />
+                    {errors.zipCode && (
+                      <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
+                        <AlertCircle className="w-3.5 h-3.5" />
+                        {errors.zipCode}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {currentStep === 3 && (
+              <div className="space-y-6">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-10 h-10 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
+                    <Globe className="w-5 h-5" />
+                  </div>
+                  <h2 className="text-xl font-semibold text-gray-900">Preferences</h2>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Preferred Language <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.preferredLanguage || ""}
+                    onChange={(e) => handleInputChange("preferredLanguage", e.target.value)}
+                    placeholder="e.g., English, Spanish, French"
+                    className={`w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white ${
+                      errors.preferredLanguage ? "border-red-500" : "border-gray-300"
+                    }`}
+                  />
+                  {errors.preferredLanguage && (
+                    <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
+                      <AlertCircle className="w-3.5 h-3.5" />
+                      {errors.preferredLanguage}
+                    </p>
+                  )}
+                </div>
+
+
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex gap-3">
+                  <Info className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                  <div className="text-sm text-blue-900">
+                    <p className="font-medium mb-1">Privacy Notice</p>
+                    <p>We will only use your contact information for appointment reminders and important health updates. You can change these preferences at any time.</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {currentStep === 4 && (
+              <div className="space-y-6">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-10 h-10 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
+                    <Heart className="w-5 h-5" />
+                  </div>
+                  <h2 className="text-xl font-semibold text-gray-900">Emergency Contact</h2>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Contact Name <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.emergencyContactName || ""}
+                    onChange={(e) => handleInputChange("emergencyContactName", e.target.value)}
+                    className={`w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white ${
+                      errors.emergencyContactName ? "border-red-500" : "border-gray-300"
+                    }`}
+                  />
+                  {errors.emergencyContactName && (
+                    <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
+                      <AlertCircle className="w-3.5 h-3.5" />
+                      {errors.emergencyContactName}
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Contact Phone <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="tel"
+                    value={formData.emergencyContactPhone || ""}
+                    onChange={(e) => handleInputChange("emergencyContactPhone", e.target.value)}
+                    className={`w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white ${
+                      errors.emergencyContactPhone ? "border-red-500" : "border-gray-300"
+                    }`}
+                  />
+                  {errors.emergencyContactPhone && (
+                    <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
+                      <AlertCircle className="w-3.5 h-3.5" />
+                      {errors.emergencyContactPhone}
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Relationship <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.emergencyContactRelationship || ""}
+                    onChange={(e) => handleInputChange("emergencyContactRelationship", e.target.value)}
+                    placeholder="e.g., Spouse, Parent, Sibling, Friend"
+                    className={`w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white ${
+                      errors.emergencyContactRelationship ? "border-red-500" : "border-gray-300"
+                    }`}
+                  />
+                  {errors.emergencyContactRelationship && (
+                    <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
+                      <AlertCircle className="w-3.5 h-3.5" />
+                      {errors.emergencyContactRelationship}
+                    </p>
                   )}
                 </div>
               </div>
+            )}
 
-              {/* Additional Information */}
-              <div className="border-b pb-6">
-                <h2 className="text-xl font-semibold text-gray-700 mb-4">Additional Information</h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Preferred Language <span className="text-red-500">*</span>
-                    </label>
-                    <select
-                      {...register("preferredLanguage")}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
-                    >
-                      <option value="">Select language</option>
-                      <option value="Thai">Thai</option>
-                      <option value="English">English</option>
-                      <option value="Chinese">Chinese</option>
-                      <option value="Japanese">Japanese</option>
-                      <option value="Korean">Korean</option>
-                      <option value="Other">Other</option>
-                    </select>
-                    {errors.preferredLanguage && (
-                      <p className="text-red-500 text-xs mt-1">{errors.preferredLanguage.message}</p>
-                    )}
+            {currentStep === 5 && (
+              <div className="space-y-6">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-10 h-10 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
+                    <ShieldCheck className="w-5 h-5" />
+                  </div>
+                  <h2 className="text-xl font-semibold text-gray-900">Review & Submit</h2>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                      <User className="w-4 h-4" />
+                      Personal Information
+                    </h3>
+                    <div className="grid grid-cols-2 gap-3 text-sm">
+                      <div>
+                        <span className="text-gray-500">Name:</span>
+                        <p className="font-medium text-gray-900">{formData.firstName} {formData.lastName}</p>
+                      </div>
+                      <div>
+                        <span className="text-gray-500">Date of Birth:</span>
+                        <p className="font-medium text-gray-900">{formData.dateOfBirth}</p>
+                      </div>
+                      <div>
+                        <span className="text-gray-500">Gender:</span>
+                        <p className="font-medium text-gray-900">{formData.gender?.replace("_", " ")}</p>
+                      </div>
+                    </div>
                   </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Nationality <span className="text-red-500">*</span>
-                    </label>
-                    <select
-                      {...register("nationality")}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
-                    >
-                      <option value="">Select nationality</option>
-                      <option value="Thai">Thai</option>
-                      <option value="American">American</option>
-                      <option value="British">British</option>
-                      <option value="Chinese">Chinese</option>
-                      <option value="Japanese">Japanese</option>
-                      <option value="Korean">Korean</option>
-                      <option value="Other">Other</option>
-                    </select>
-                    {errors.nationality && (
-                      <p className="text-red-500 text-xs mt-1">{errors.nationality.message}</p>
-                    )}
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                      <Phone className="w-4 h-4" />
+                      Contact Information
+                    </h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                      <div>
+                        <span className="text-gray-500">Email:</span>
+                        <p className="font-medium text-gray-900">{formData.email}</p>
+                      </div>
+                      <div>
+                        <span className="text-gray-500">Phone:</span>
+                        <p className="font-medium text-gray-900">{formData.phone}</p>
+                      </div>
+                      <div className="sm:col-span-2">
+                        <span className="text-gray-500">Address:</span>
+                        <p className="font-medium text-gray-900">
+                          {formData.address}, {formData.city}, {formData.state} {formData.zipCode}
+                        </p>
+                      </div>
+                    </div>
                   </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Religion</label>
-                    <select
-                      {...register("religion")}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
-                    >
-                      <option value="">Select religion</option>
-                      <option value="Buddhism">Buddhism</option>
-                      <option value="Christianity">Christianity</option>
-                      <option value="Islam">Islam</option>
-                      <option value="Hinduism">Hinduism</option>
-                      <option value="Other">Other</option>
-                      <option value="Prefer not to say">Prefer not to say</option>
-                    </select>
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                      <Globe className="w-4 h-4" />
+                      Preferences
+                    </h3>
+                    <div className="grid grid-cols-2 gap-3 text-sm">
+                      <div>
+                        <span className="text-gray-500">Language:</span>
+                        <p className="font-medium text-gray-900">{formData.preferredLanguage}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                      <Heart className="w-4 h-4" />
+                      Emergency Contact
+                    </h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                      <div>
+                        <span className="text-gray-500">Name:</span>
+                        <p className="font-medium text-gray-900">{formData.emergencyContactName}</p>
+                      </div>
+                      <div>
+                        <span className="text-gray-500">Phone:</span>
+                        <p className="font-medium text-gray-900">{formData.emergencyContactPhone}</p>
+                      </div>
+                      <div>
+                        <span className="text-gray-500">Relationship:</span>
+                        <p className="font-medium text-gray-900">{formData.emergencyContactRelationship}</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex gap-3">
+                  <Info className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                  <div className="text-sm text-blue-900">
+                    <p className="font-medium mb-1">Before you submit</p>
+                    <p>Please review all information carefully. You can go back to any step to make changes before submitting.</p>
                   </div>
                 </div>
               </div>
+            )}
+          </div>
 
-              {/* Emergency Contact */}
-              <div className="pb-6">
-                <h2 className="text-xl font-semibold text-gray-700 mb-4">Emergency Contact</h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Contact Name</label>
-                    <input
-                      {...register("emergencyContactName")}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
-                    />
-                  </div>
+          {/* Navigation Buttons */}
+          <div className="flex items-center justify-between mt-8 pt-6 border-t border-gray-200">
+            <button
+              type="button"
+              onClick={prevStep}
+              disabled={currentStep === 1}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Previous
+            </button>
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Relationship</label>
-                    <input
-                      {...register("emergencyContactRelationship")}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
-                    />
-                  </div>
-                </div>
-              </div>
-
+            {currentStep < 5 ? (
               <button
-                type="submit"
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg shadow-lg transition duration-200 transform hover:scale-[1.02]"
+                type="button"
+                onClick={nextStep}
+                className="flex items-center gap-2 px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-medium text-sm transition-colors"
               >
-                Submit Registration
+                Next
+                <ArrowRight className="w-4 h-4" />
               </button>
-            </form>
-          )}
+            ) : (
+              <button
+                type="button"
+                onClick={handleSubmit}
+                className="flex items-center gap-2 px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md font-medium text-sm transition-colors"
+              >
+                Submit
+                <Send className="w-4 h-4" />
+              </button>
+            )}
+          </div>
         </div>
       </div>
-    </div>
+    </main>
   );
 }
