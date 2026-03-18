@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef } from "react";
 import { PatientFormData } from "@/types/patient";
-import { getAblyClient, destroyAblyClient } from "@/lib/ably";
+import { getAblyClient } from "@/lib/ably";
 
 function sanitize(value: string | undefined): string {
   if (!value) return "-";
