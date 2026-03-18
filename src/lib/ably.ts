@@ -1,7 +1,5 @@
 import Ably from 'ably';
 
-export const PATIENT_CHANNEL = 'patient-form';
-
 let client: Ably.Realtime | null = null;
 
 export function getAblyClient(): Ably.Realtime {
