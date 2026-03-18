@@ -6,6 +6,7 @@ import { ConnectionStatus } from "@/components/ui/ConnectionStatus";
 import { ProgressBar } from "@/components/ui/ProgressBar";
 import { PatientFormData, StepSchemas } from "@/types/patient";
 import { getAblyClient } from "@/lib/ably";
+import { generateSessionId } from "@/lib/utils";
 import { ZodError } from "zod";
 
 const STEPS = [
@@ -21,11 +22,12 @@ export default function PatientForm() {
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [formData, setFormData] = useState<Partial<PatientFormData>>({
     gender: undefined,
   });
 
-  const sessionId = useRef<string>(`session-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`);
+  const sessionId = useRef<string>(generateSessionId());
   const debounceTimer = useRef<NodeJS.Timeout | null>(null);
 
   // Ably connection
@@ -39,6 +41,7 @@ export default function PatientForm() {
 
     return () => {
       channel.unsubscribe();
+      if (debounceTimer.current) clearTimeout(debounceTimer.current);
     };
   }, []);
 
@@ -67,6 +70,7 @@ export default function PatientForm() {
     const updatedData = { ...formData, [field]: value };
     setFormData(updatedData);
     setErrors((prev) => ({ ...prev, [field]: "" }));
+    setSubmitError(null);
     publishUpdate(updatedData);
   };
 
@@ -126,7 +130,7 @@ export default function PatientForm() {
       setIsSubmitted(true);
     } catch (error) {
       console.error("Error submitting form:", error);
-      alert("Failed to submit form. Please try again.");
+      setSubmitError("Failed to submit form. Please try again.");
     }
   };
 
@@ -676,25 +680,33 @@ export default function PatientForm() {
               Previous
             </button>
 
-            {currentStep < 5 ? (
-              <button
-                type="button"
-                onClick={nextStep}
-                className="flex items-center gap-2 px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-medium text-sm transition-colors"
-              >
-                Next
-                <ArrowRight className="w-4 h-4" />
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={handleSubmit}
-                className="flex items-center gap-2 px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md font-medium text-sm transition-colors"
-              >
-                Submit
-                <Send className="w-4 h-4" />
-              </button>
-            )}
+            <div className="flex flex-col items-end gap-2">
+              {submitError && (
+                <p className="text-sm text-red-600 flex items-center gap-1">
+                  <AlertCircle className="w-3.5 h-3.5" />
+                  {submitError}
+                </p>
+              )}
+              {currentStep < 5 ? (
+                <button
+                  type="button"
+                  onClick={nextStep}
+                  className="flex items-center gap-2 px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-medium text-sm transition-colors"
+                >
+                  Next
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleSubmit}
+                  className="flex items-center gap-2 px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md font-medium text-sm transition-colors"
+                >
+                  Submit
+                  <Send className="w-4 h-4" />
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </div>
