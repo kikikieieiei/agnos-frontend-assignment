@@ -287,12 +287,12 @@ export default function PatientForm() {
                 </label>
                 <input
                   type="tel"
-                  {...register("phoneNumber")}
+                  {...register("phone")}
                   placeholder="+1 (555) 123-4567"
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
-                {errors.phoneNumber && (
-                  <p className="text-red-600 text-sm mt-1">{errors.phoneNumber.message}</p>
+                {errors.phone && (
+                  <p className="text-red-600 text-sm mt-1">{errors.phone.message}</p>
                 )}
               </div>
 

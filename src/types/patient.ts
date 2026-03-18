@@ -7,7 +7,6 @@ export const patientFormSchema = z.object({
   dateOfBirth: z.string().min(1, "Date of birth is required"),
   gender: z.string().min(1, "Gender is required"),
   phone: z.string().regex(/^[+]?[\d\s\-\(\)]{7,15}$/, "Invalid phone number format"),
-  phoneNumber: z.string().regex(/^[+]?[\d\s\-\(\)]{7,15}$/, "Invalid phone number format"),
   email: z.string().email("Invalid email address"),
   address: z.string().min(1, "Address is required"),
   city: z.string().min(1, "City is required"),
@@ -55,7 +54,6 @@ export interface PatientFormData {
   dateOfBirth: string;
   gender: string;
   phone: string;
-  phoneNumber: string;
   email: string;
   address: string;
   city: string;

@@ -123,6 +123,54 @@ src/
     └── patient.ts                # Zod schemas and types
 ```
 
+## Design Decisions
+
+### Responsive Design
+- **Mobile-first approach** using TailwindCSS breakpoints (`sm:`, `md:`, `lg:`)
+- Single-column layout on mobile, multi-column grid on desktop (`sm:grid-cols-2`, `md:grid-cols-2`)
+- Patient form: full-width inputs on mobile, 2-column grid on tablet/desktop
+- Staff dashboard: single-column cards on mobile, 2-column grid on desktop (`lg:grid-cols-2`)
+- Touch-friendly input sizing with adequate padding (`px-4 py-2`)
+
+### Healthcare Design System
+- Clean white background (`bg-gray-50` page, `bg-white` cards) for clinical clarity
+- Subtle borders (`border-gray-200`) over heavy shadows for professional look
+- Blue accent (`blue-600`) as primary action color — calming and trustworthy
+- No emoji in UI — replaced with `lucide-react` icons for accessibility and professionalism
+- Status indicators use colored dots instead of emoji for screen reader compatibility
+
+### Multi-Step Form
+- 5-step wizard reduces cognitive load for patients filling out lengthy forms
+- Step validation prevents progression with incomplete data
+- Review step (step 5) allows patients to verify all data before submission
+- Back navigation allows correction without losing previous step data
+
+## Component Architecture
+
+### Pages
+| Page | Path | Description |
+|------|------|-------------|
+| Home | `app/page.tsx` | Landing page with links to patient form and staff dashboard |
+| Patient Form | `app/patient/page.tsx` | 5-step registration form with real-time Ably publishing |
+| Staff Dashboard | `app/staff/page.tsx` | Real-time monitoring dashboard subscribing to patient updates |
+| Ably Token API | `app/api/ably-token/route.ts` | Server-side token generation — keeps API key secret |
+
+### UI Components (`components/ui/`)
+| Component | Description |
+|-----------|-------------|
+| `ProgressBar` | Step indicator showing current step and completed steps with check icons |
+| `ConnectionStatus` | Green/red dot badge showing Ably WebSocket connection state |
+| `StatusIndicator` | Colored dot + label showing patient form status (not started / actively filling / inactive / submitted) |
+| `SectionCard` | Card container with icon and title for grouping related data fields |
+| `DataField` | Label + value display with "Not provided" fallback for staff dashboard |
+
+### Data Flow
+```
+Patient Form → (debounced 500ms) → Ably Channel → Staff Dashboard
+     │                                                    │
+     └─ publishes { sessionId, formData, timestamp }     └─ extracts message.data.formData
+```
+
 ## Feature Branches
 
 | Branch | Description |
