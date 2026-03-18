@@ -406,6 +406,11 @@ export default function PatientForm() {
                       type="text"
                       value={formData.zipCode || ""}
                       onChange={(e) => handleInputChange("zipCode", e.target.value)}
+                      onKeyDown={(e) => {
+                        if (!/[\d]/.test(e.key) && !["Backspace","Delete","ArrowLeft","ArrowRight","Tab"].includes(e.key)) {
+                          e.preventDefault();
+                        }
+                      }}
                       className={`w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white ${
                         errors.zipCode ? "border-red-500" : "border-gray-300"
                       }`}
@@ -533,6 +538,11 @@ export default function PatientForm() {
                     type="tel"
                     value={formData.emergencyContactPhone || ""}
                     onChange={(e) => handleInputChange("emergencyContactPhone", e.target.value)}
+                    onKeyDown={(e) => {
+                      if (!/[\d\+\-\(\)\s]/.test(e.key) && !["Backspace","Delete","ArrowLeft","ArrowRight","Tab"].includes(e.key)) {
+                        e.preventDefault();
+                      }
+                    }}
                     className={`w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white ${
                       errors.emergencyContactPhone ? "border-red-500" : "border-gray-300"
                     }`}
