@@ -5,7 +5,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useEffect, useState, useRef, useCallback } from "react";
 import { z } from "zod";
 import { PatientFormData } from "@/types/patient";
-import { getAblyClient, destroyAblyClient } from "@/lib/ably";
+import { getAblyClient } from "@/lib/ably";
 
 // Zod validation schema
 const patientFormSchema = z.object({
